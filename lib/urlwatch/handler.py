@@ -128,10 +128,23 @@ class UrlJob(JobBase):
             headers['If-Modified-Since'] = timestamp
 
         if ' ' in self.location:
-            self.location, post_data = self.location.split(' ', 1)
+            self.location, request_data = self.location.split(' ', 1)
             log.info('Sending POST request to %s', self.location)
         else:
-            post_data = None
+            request_data = None
+
+        # Split request data and get post data or header data
+        post_data = None
+        if request_data is not None:
+            for data in request_data.split(' '):
+                if '=' in data:
+                    log.info('Sending POST request to %s', self.location)
+                    post_data = data
+                elif ':' in data:
+                    header_datas = data.split('&')
+                    for _ in header_datas:
+                        k, v = _.split(':')
+                        headers[k] = v
 
         parts = urlparse.urlparse(self.location)
         if parts.username or parts.password:
