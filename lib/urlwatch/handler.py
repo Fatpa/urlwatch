@@ -135,7 +135,7 @@ class UrlJob(JobBase):
 
         # Split request data and get post data or header data
         post_data = None
-        if request_data is not None:
+        if request_data:
             for data in request_data.split(' '):
                 if '=' in data:
                     log.info('Sending POST request to %s', self.location)
