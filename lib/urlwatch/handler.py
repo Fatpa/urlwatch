@@ -46,6 +46,7 @@ import stat
 import sys
 import re
 import zlib
+import json
 
 def get_current_user():
     try:
@@ -134,17 +135,21 @@ class UrlJob(JobBase):
             request_data = None
 
         # Split request data and get post data or header data
-        post_data = None
+        post_data = dict()
         if request_data:
             for data in request_data.split(' '):
                 if '=' in data:
-                    log.info('Sending POST request to %s', self.location)
-                    post_data = data
+                    k, v = data.split('=')
+                    post_data[k] = v
                 elif ':' in data:
-                    header_datas = data.split('&')
-                    for _ in header_datas:
-                        k, v = _.split(':')
-                        headers[k] = v
+                    k, v = data.split(':')
+                    headers[k] = v
+
+        if post_data:
+            log.info('Sending POST request to %s', self.location)
+            post_data = json.dumps(post_data)
+        else:
+            post_data = None
 
         parts = urlparse.urlparse(self.location)
         if parts.username or parts.password:
