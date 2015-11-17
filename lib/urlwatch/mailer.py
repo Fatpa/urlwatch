@@ -38,7 +38,7 @@ from email.mime.text import MIMEText
 from email.utils import formatdate
 
 def send(smtp_server, from_email, to_email, subject, body,
-         tls=False, auth=False):
+         tls=False, auth=False, passwd=None):
     msg = MIMEText(body, 'plain', 'utf_8')
     msg['Subject'] = subject
     msg['From'] = from_email

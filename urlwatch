@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 #
 # This file is part of urlwatch (https://thp.io/2008/urlwatch/).
@@ -164,6 +164,7 @@ if __name__ == '__main__':
     parser.add_option('', '--hooks', dest='hooks', metavar='FILE', help='Use specified file as hooks.py module')
     parser.add_option('', '--error_hooks', dest='error_hooks', metavar='FILE', help='User specified file as error_hooks.py module')
     parser.add_option('-e', '--display-errors', action='store_true', dest='display_errors', help='Include HTTP errors (404, etc..) in the output')
+    parser.add_option('', '--only-error-mails', action='store_true', dest='error_mails', default=False, help='Send error results via e-mail (--mailto)')
     parser.add_option('-t', '--mailto', dest='email', metavar='ADDRESS', help='Send results via e-mail to ADDRESS')
     parser.add_option('-f', '--mailfrom', dest='email_from', metavar='ADDRESS', help='Alternate From: address for e-mail (--mailto)')
     parser.add_option('-s', '--smtp', dest='email_smtp', metavar='SERVER', help='SMTP server for e-mail (--mailto)')
@@ -193,11 +194,14 @@ if __name__ == '__main__':
 
     if options.password:
         mailer.set_password(options.email_smtp, options.email_from)
-        sys.exit(0)
 
     if options.email:
         log.info('Send emails enabled')
         enable_emails = True
+        if options.error_mails:
+            only_enable_error_emails = True
+        else:
+            only_enable_error_emails = False
         email_smtp_server = options.email_smtp or 'localhost'
         email_sender_address = options.email_from or options.email
         email_receiver_address = options.email
@@ -274,9 +278,11 @@ if __name__ == '__main__':
 
     summary = []
     details = []
+    error_details = []
     count = 0
 
-    filter_func = lambda x, y: y
+    # Return headers and content
+    filter_func = lambda x, y, z: z
 
     if os.path.exists(hooks_py):
         log.info('using hooks.py from %s' % hooks_py)
@@ -372,26 +378,30 @@ if __name__ == '__main__':
                 log.error('got HTTPError while loading url: %s' % error)
                 if display_errors:
                     details += foutput('error', job, error, summary)
+                    error_details += foutput('error', job, error, summary)
         except handler.ShellError, error:
             error_filter_func(job, error)
             log.error('Shell returned %d' % error.result)
             if display_errors:
                 details += foutput('error', job, error, summary)
+                error_details += foutput('error', job, error, summary)
         except urllib2.URLError, error:
             error_filter_func(job, error)
             log.error('got URLError while loading url: %s' % error)
             if display_errors:
-                details += foutput('error', job, error, summary)
+                error_details += foutput('error', job, error, summary)
         except IOError, error:
             error_filter_func(job, error)
             log.error('got IOError while loading url: %s' % error)
             if display_errors:
                 details += foutput('error', job, error, summary)
+                error_details += foutput('error', job, error, summary)
         except socket.timeout, error:
             error_filter_func(job, error)
             log.error('got timeout while loading url: %s' % error)
             if display_errors:
                 details += foutput('error', job, error, summary)
+                error_details += foutput('error', job, error, summary)
         except httplib.error, error:
             error_filter_func(job, error)
             # This is to workaround a bug in urllib2, see
@@ -399,6 +409,8 @@ if __name__ == '__main__':
             log.error('got httplib error while loading url: %s' % error)
             if display_errors:
                 details += foutput('error', job, (repr(error) +
+                        '\n' + str(error)).strip(), summary)
+                error_details += foutput('error', job, (repr(error) +
                         '\n' + str(error)).strip(), summary)
 
         count += 1
@@ -421,6 +433,28 @@ if __name__ == '__main__':
     else:
         log.info('summary is too short - not printing')
 
+    if len(error_details) > 0:
+        log.info('printing error details with %d items' % len(error_details))
+        if not options.quiet:
+            print '\n'.join(error_details)
+            print '--\n'
+
+        if only_enable_error_emails:
+            try:
+                subject_args = {
+                    'count': len(error_details),
+                }
+
+                mailer.send(email_smtp_server, email_sender_address,
+                        email_receiver_address,  email_subject.format(**subject_args),
+                        short_summary + '\n' + '\n'.join(error_details),
+                        auth=email_auth, tls=email_tls)
+                log.info('E-Mail to %s sent.', email_receiver_address)
+            except Exception, e:
+                log.warning('E-Mail delivery error: %s', e)
+    else:
+        log.info('no error details collected - not printing')
+
     if len(details) > 1:
         log.info('printing details with %d items' % len(details))
         if not options.quiet:
@@ -430,7 +464,7 @@ if __name__ == '__main__':
             print 'Website: %s' % (__url__,)
             print 'watched %d URLs in %d seconds\n' % (count, (end-start).seconds)
 
-        if enable_emails:
+        if not only_enable_error_emails and enable_emails:
             try:
                 subject_args = {
                     'count': len(summary),
@@ -445,4 +479,3 @@ if __name__ == '__main__':
                 log.warning('E-Mail delivery error: %s', e)
     else:
         log.info('no details collected - not printing')
-

@@ -91,9 +91,9 @@ class ShellError(Exception):
         return '%s: Exit status %d' % (self.__class__.__name__, self.result)
 
 
-def use_filter(filter_func, url, input):
+def use_filter(filter_func, url, headers, input):
     """Apply a filter function to input from an URL"""
-    output = filter_func(url, input)
+    output = filter_func(url, headers, input)
 
     if output is None:
         # If the filter does not return a value, it is
@@ -187,7 +187,7 @@ class UrlJob(JobBase):
                 # (Debian bug 731931)
                 content = content.decode('ascii', 'ignore')
 
-        return use_filter(filter_func, self.location, content)
+        return use_filter(filter_func, self.location, headers, content)
 
 
 def parse_urls_txt(urls_txt):
